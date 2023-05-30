@@ -1,6 +1,7 @@
 #include "neural_network.h"
 #include <Eigen/src/Core/Map.h>
 #include <Eigen/src/Core/Matrix.h>
+#include <Eigen/src/Core/util/Constants.h>
 #include <cstddef>
 #include <stdexcept>
 #include <iostream>
@@ -39,7 +40,31 @@ Eigen::VectorXd NeuralNetwork::compute_output(std::vector<double> inputs) const 
         }
     }
 
-    return values;
+    return values.transpose();
+}
+
+Eigen::MatrixXd NeuralNetwork::compute_output(Eigen::MatrixXd inputs) const {
+    inputs.transposeInPlace();
+
+    if(inputs.rows() < input_size()) {
+        // Pad?
+        Eigen::MatrixXd padded_inputs = Eigen::MatrixXd::Zero(input_size(), inputs.cols());
+        padded_inputs.topRows(inputs.rows()) = inputs.block(0, 0, inputs.rows(), inputs.cols());
+        inputs = std::move(padded_inputs);
+    } else if (inputs.rows() > input_size()) {
+        throw std::runtime_error("Bad input size!");
+    }
+
+    for(size_t layer = 0u; layer < num_non_input_layers(); ++layer) {
+        inputs = (input_weights_.at(layer) * inputs).colwise() + biases_.at(layer);
+        for(int i = 0; i < inputs.rows(); ++i) {
+            for(int j = 0; j < inputs.cols(); ++j) {
+                inputs(i, j) = activation_func_(inputs(i, j));
+            }
+        }
+    }
+
+    return inputs.transpose();
 }
 
 }

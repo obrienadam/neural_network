@@ -20,5 +20,13 @@ int main() {
 
     std::cout << output << std::endl;
 
+
+    Eigen::MatrixXd inputs(8, 45);
+    inputs.setZero();
+
+    auto output2 = nn.compute_output(inputs);
+
+    std::cout << output2;
+
     return 0;
 }

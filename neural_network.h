@@ -17,6 +17,8 @@ class NeuralNetwork{
 
     Eigen::VectorXd compute_output(std::vector<double> inputs) const;
 
+    Eigen::MatrixXd compute_output(Eigen::MatrixXd inputs) const;
+
     size_t num_layers() const {
         return layer_bounds.size() - 1u;
     }
