@@ -4,13 +4,13 @@
 
 namespace nn {
 
-class LabeledExamples{
+class LabeledExamples {
 
-    void resize(size_t num_features, size_t label_size, size_t data_set_size);
+  void resize(size_t num_features, size_t label_size, size_t data_set_size);
 
-    protected:
-    Eigen::MatrixXd features_;
-    Eigen::MatrixXd target_vectors_;
+protected:
+  Eigen::MatrixXd features_;
+  Eigen::MatrixXd target_vectors_;
 };
 
-}
+} // namespace nn

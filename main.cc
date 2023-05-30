@@ -1,32 +1,29 @@
 #include <cmath>
-#include <vector>
 #include <iostream>
+#include <vector>
 
 #include "neural_network.h"
 
 int main() {
-    using namespace std;
+  using namespace std;
 
-    nn::NeuralNetwork nn;
-    
-    nn.initialize(8, 5, {9, 9, 9});
-    nn.set_activation_func([](double x) {
-        return std::log(1 + std::exp(x));
-    });
+  nn::NeuralNetwork nn;
 
-    std::vector<double> input_vals(nn.input_size());
-    std::iota(input_vals.begin(), input_vals.end(), 1.);
-    auto output = nn.compute_output(input_vals);
+  nn.initialize(8, 5, {9, 9, 9});
+  nn.set_activation_func([](double x) { return std::log(1 + std::exp(x)); });
 
-    std::cout << output << std::endl;
+  std::vector<double> input_vals(nn.input_size());
+  std::iota(input_vals.begin(), input_vals.end(), 1.);
+  auto output = nn.compute_output(input_vals);
 
+  std::cout << output << std::endl;
 
-    Eigen::MatrixXd inputs(8, 45);
-    inputs.setZero();
+  Eigen::MatrixXd inputs(8, 45);
+  inputs.setZero();
 
-    auto output2 = nn.compute_output(inputs);
+  auto output2 = nn.compute_output(inputs);
 
-    std::cout << output2;
+  std::cout << output2;
 
-    return 0;
+  return 0;
 }
