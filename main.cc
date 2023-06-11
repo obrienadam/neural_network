@@ -8,22 +8,19 @@ int main() {
   using namespace std;
 
   nn::NeuralNetwork nn;
+  nn.initialize({3, 4, 4, 2});
+  nn.randomize_weights();
+  nn.randomize_biases();
 
-  nn.initialize(8, 5, {9, 9, 9});
-  nn.set_activation_func([](double x) { return std::log(1 + std::exp(x)); });
+  nn::Matrix inputs(7, 3);
 
-  std::vector<double> input_vals(nn.input_size());
-  std::iota(input_vals.begin(), input_vals.end(), 1.);
-  auto output = nn.compute_output(input_vals);
+  inputs << 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1;
 
-  std::cout << output << std::endl;
+ // cout << nn.infer(inputs) << '\n';
 
-  Eigen::MatrixXd inputs(8, 45);
-  inputs.setZero();
-
-  auto output2 = nn.compute_output(inputs);
-
-  std::cout << output2;
+  for(const auto& a: nn.compute_activations(inputs)) {
+    std::cout << a << "\n\n";
+  }
 
   return 0;
 }

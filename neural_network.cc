@@ -2,75 +2,128 @@
 #include <Eigen/src/Core/Map.h>
 #include <Eigen/src/Core/Matrix.h>
 #include <Eigen/src/Core/util/Constants.h>
+#include <cmath>
 #include <cstddef>
+#include <functional>
 #include <iostream>
+#include <random>
 #include <stdexcept>
 
 namespace nn {
 
-void NeuralNetwork::initialize(size_t input_dim, size_t output_dim,
-                               const std::vector<size_t> &hidden_layer_dims) {
-  layer_bounds = {0u, input_dim};
-
-  for (size_t hidden_layer_dim : hidden_layer_dims) {
-    layer_bounds.push_back(layer_bounds.back() + hidden_layer_dim);
+void NeuralNetwork::initialize(std::vector<size_t> layer_sizes) {
+  if (layer_sizes.size() < 2) {
+    throw std::invalid_argument("Must be at least two layers.");
   }
 
-  layer_bounds.push_back(layer_bounds.back() + output_dim);
+  layer_sizes_ = std::move(layer_sizes);
 
-  biases_.resize(num_non_input_layers());
-  input_weights_.resize(num_non_input_layers());
-  for (size_t layer = 0u; layer < num_non_input_layers(); ++layer) {
-    biases_.at(layer).setZero(num_nodes_in_layer(layer + 1u));
-    input_weights_.at(layer).setZero(num_nodes_in_layer(layer + 1u),
-                                     num_nodes_in_layer(layer));
+  weights_.resize(num_layers() - 1);
+  biases_.resize(num_layers() - 1);
+
+  for (int i = 0; i < num_layers() - 1; ++i) {
+    weights_[i].setZero(layer_sizes_[i], layer_sizes_[i + 1]);
+    biases_[i].setZero(layer_sizes_[i + 1]);
   }
+
+  activation_funcs_.assign(num_layers() - 1, RELU);
+  activation_funcs_.back() = SOFTMAX;
 }
 
-Eigen::VectorXd
-NeuralNetwork::compute_output(std::vector<double> inputs) const {
-  if (inputs.size() != num_nodes_in_layer(0)) {
-    throw std::runtime_error("Bad input size!");
+Matrix NeuralNetwork::infer(Matrix inputs) const {
+  if (inputs.cols() != layer_sizes_[0]) {
+    throw std::invalid_argument("Bad input size!");
   }
 
-  Eigen::VectorXd values =
-      Eigen::Map<Eigen::VectorXd>(inputs.data(), inputs.size());
+  for (int i = 1; i < num_layers(); ++i) {
+    inputs = (inputs * weights_[i - 1]).rowwise() + biases_[i - 1];
 
-  for (size_t layer = 0u; layer < num_non_input_layers(); ++layer) {
-    values = input_weights_.at(layer) * values + biases_.at(layer);
+    switch (activation_funcs_[i - 1]) {
+    case RELU:
+      inputs = inputs.unaryExpr([](double z) { return std::max(0., z); });
+      break;
 
-    for (int i = 0; i < values.rows(); ++i) {
-      values(i) = activation_func_(values(i));
-    }
-  }
+    case SOFTMAX:
+      for (int i = 0; i < inputs.rows(); ++i) {
+        double sum_exp_z = 0.;
+        double m = inputs.row(i).maxCoeff();
 
-  return values.transpose();
-}
+        for (int j = 0; j < inputs.cols(); ++j) {
+          sum_exp_z += std::exp(inputs(i, j) - m);
+        }
 
-Eigen::MatrixXd NeuralNetwork::compute_output(Eigen::MatrixXd inputs) const {
-  inputs.transposeInPlace();
-
-  if (inputs.rows() < input_size()) {
-    // Pad?
-    Eigen::MatrixXd padded_inputs =
-        Eigen::MatrixXd::Zero(input_size(), inputs.cols());
-    padded_inputs.topRows(inputs.rows()) =
-        inputs.block(0, 0, inputs.rows(), inputs.cols());
-    inputs = std::move(padded_inputs);
-  } else if (inputs.rows() > input_size()) {
-    throw std::runtime_error("Bad input size!");
-  }
-
-  for (size_t layer = 0u; layer < num_non_input_layers(); ++layer) {
-    inputs = (input_weights_.at(layer) * inputs).colwise() + biases_.at(layer);
-    for (int i = 0; i < inputs.rows(); ++i) {
-      for (int j = 0; j < inputs.cols(); ++j) {
-        inputs(i, j) = activation_func_(inputs(i, j));
+        for (int j = 0; j < inputs.cols(); ++j) {
+          inputs(i, j) = std::exp(inputs(i, j) - m) / sum_exp_z;
+        }
       }
+
+      break;
     }
   }
 
-  return inputs.transpose();
+  return inputs;
+}
+
+std::vector<Matrix>
+NeuralNetwork::compute_activations(const Matrix &inputs) const {
+  if (inputs.cols() != layer_sizes_[0]) {
+    throw std::invalid_argument("Bad input size!");
+  }
+
+  std::vector<Matrix> result;
+
+  for (int i = 1; i < num_layers(); ++i) {
+    const Matrix &previous_activation = i == 1 ? inputs : result.back();
+
+    auto op =
+        (previous_activation * weights_[i - 1]).rowwise() + biases_[i - 1];
+
+    switch (activation_funcs_[i - 1]) {
+    case RELU:
+      result.emplace_back(
+          op.unaryExpr([](double z) { return std::max(0., z); }));
+      break;
+
+    case SOFTMAX:
+      auto z = op.eval();
+
+      for (int i = 0; i < z.rows(); ++i) {
+        double sum_exp_z = 0.;
+        double m = z.row(i).maxCoeff();
+
+        for (int j = 0; j < z.cols(); ++j) {
+          sum_exp_z += std::exp(z(i, j) - m);
+        }
+
+        for (int j = 0; j < z.cols(); ++j) {
+          z(i, j) = std::exp(z(i, j) - m) / sum_exp_z;
+        }
+      }
+
+      result.emplace_back(std::move(z));
+      break;
+    }
+  }
+
+  return result;
+}
+
+void NeuralNetwork::randomize_weights(size_t seed) {
+  std::mt19937_64 gen{seed};
+  std::normal_distribution<double> dist(0., 10.);
+
+  for (auto &weight_matrix : weights_) {
+    weight_matrix = weight_matrix.unaryExpr([&](double) { return dist(gen); });
+  }
+}
+
+void NeuralNetwork::randomize_biases(size_t seed) {
+  std::mt19937_64 gen{seed};
+  std::normal_distribution<double> dist(1., 1.);
+
+  for (auto &bias : biases_) {
+    bias = bias.unaryExpr([&](double) { return dist(gen); });
+  }
 }
 
 } // namespace nn
